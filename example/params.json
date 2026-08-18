@@ -1,0 +1,10 @@
+{
+  "spot": 100,
+  "vol": 0.2,
+  "rate": 0.05,
+  "strike": 105,
+  "maturity": 1,
+  "steps": 64,
+  "paths": 20000,
+  "seed": 42
+}

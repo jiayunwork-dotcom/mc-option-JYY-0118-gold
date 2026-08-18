@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mc-option - Monte Carlo Option Pricing</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: #1a1a2e; color: #eee; padding: 24px; }
+        h1 { text-align: center; margin-bottom: 20px; color: #00d2ff; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card { background: #16213e; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+        label { display: block; font-size: 12px; color: #aaa; margin-bottom: 4px; }
+        input, select { width: 100%; padding: 8px; border: 1px solid #333; border-radius: 4px; background: #0f3460; color: #fff; font-size: 14px; margin-bottom: 12px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }
+        button { padding: 12px 24px; background: #00d2ff; color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #00b4d8; }
+        .result { margin-top: 16px; background: #0f3460; padding: 16px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; }
+        .row { display: flex; gap: 12px; }
+        .row > * { flex: 1; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>mc-option</h1>
+    <div class="card">
+        <div class="grid">
+            <div><label>Spot</label><input id="spot" type="number" value="100" step="1"></div>
+            <div><label>Strike</label><input id="strike" type="number" value="105" step="1"></div>
+            <div><label>Vol</label><input id="vol" type="number" value="0.2" step="0.01"></div>
+            <div><label>Rate</label><input id="rate" type="number" value="0.05" step="0.01"></div>
+            <div><label>Maturity (yr)</label><input id="maturity" type="number" value="1" step="0.1"></div>
+            <div><label>Steps</label><input id="steps" type="number" value="64"></div>
+            <div><label>Paths</label><input id="paths" type="number" value="10000"></div>
+            <div><label>Type</label>
+                <select id="type">
+                    <option value="euro-call">Euro Call</option>
+                    <option value="euro-put">Euro Put</option>
+                    <option value="asian-call">Asian Call</option>
+                    <option value="asian-put">Asian Put</option>
+                </select>
+            </div>
+        </div>
+        <div class="row">
+            <button onclick="doPrice()">Price (MC)</button>
+            <button onclick="doBS()">Black-Scholes</button>
+        </div>
+        <div class="result" id="result">Results will appear here...</div>
+    </div>
+</div>
+<script>
+function params() {
+    return {
+        spot: +document.getElementById('spot').value,
+        strike: +document.getElementById('strike').value,
+        vol: +document.getElementById('vol').value,
+        rate: +document.getElementById('rate').value,
+        maturity: +document.getElementById('maturity').value,
+        steps: +document.getElementById('steps').value,
+        paths: +document.getElementById('paths').value,
+        seed: 42,
+        type: document.getElementById('type').value
+    };
+}
+async function doPrice() {
+    const res = await fetch('/api/price', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(params())}).then(r=>r.json());
+    const el = document.getElementById('result');
+    if (res.error) { el.textContent = 'Error: ' + res.error; return; }
+    el.textContent = `MC Price:  ${res.price.toFixed(6)}\nStdErr:    ${res.stderr.toFixed(6)}\n95% CI:    [${res.ci95_lo.toFixed(4)}, ${res.ci95_hi.toFixed(4)}]\nVaR95:     ${res.var95.toFixed(6)}\nES95:      ${res.es95.toFixed(6)}`;
+}
+async function doBS() {
+    const res = await fetch('/api/bs', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(params())}).then(r=>r.json());
+    const el = document.getElementById('result');
+    if (res.error) { el.textContent = 'Error: ' + res.error; return; }
+    el.textContent = `BS Call:   ${res.call_price.toFixed(6)}\nBS Put:    ${res.put_price.toFixed(6)}\nDelta:     ${res.delta.toFixed(6)}\nGamma:     ${res.gamma.toFixed(6)}\nVega:      ${res.vega.toFixed(6)}`;
+}
+</script>
+</body>
+</html>
