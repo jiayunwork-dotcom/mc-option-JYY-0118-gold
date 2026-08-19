@@ -42,43 +42,47 @@ func DefaultConfig() Config {
 // Compute 使用蒙特卡洛定价引擎数值估算所有希腊字母。
 // isCall=true 为 call，false 为 put; isAsian=true 为亚式。
 func Compute(p engine.Params, isCall, isAsian bool, cfg Config) (*Greeks, error) {
+	if cfg.SpotBump <= 0 || cfg.VolBump <= 0 || cfg.TimeBump <= 0 || cfg.RateBump <= 0 {
+		return nil, ErrBump
+	}
 	base, err := price(p, isCall, isAsian)
 	if err != nil {
 		return nil, err
 	}
 	g := &Greeks{}
 
+	// Delta: dP/dS ≈ (P(S+h) - P(S-h)) / (2h)
 	dS := p.Spot * cfg.SpotBump
-	if dS != 0 {
-		pUp := bump(p, func(pp *engine.Params) { pp.Spot += dS })
-		pDown := bump(p, func(pp *engine.Params) { pp.Spot -= dS })
-		up, err := price(pUp, isCall, isAsian)
-		if err != nil {
-			return nil, err
-		}
-		down, err := price(pDown, isCall, isAsian)
-		if err != nil {
-			return nil, err
-		}
-		g.Delta = (up - down) / (2 * dS)
-		g.Gamma = (up - 2*base + down) / (dS * dS)
+	pUp := bump(p, func(pp *engine.Params) { pp.Spot += dS })
+	pDown := bump(p, func(pp *engine.Params) { pp.Spot -= dS })
+	up, err := price(pUp, isCall, isAsian)
+	if err != nil {
+		return nil, err
 	}
-
-	if cfg.VolBump > 0 {
-		vUp := bump(p, func(pp *engine.Params) { pp.Vol += cfg.VolBump })
-		vDown := bump(p, func(pp *engine.Params) { pp.Vol -= cfg.VolBump })
-		vU, err := price(vUp, isCall, isAsian)
-		if err != nil {
-			return nil, err
-		}
-		vD, err := price(vDown, isCall, isAsian)
-		if err != nil {
-			return nil, err
-		}
-		g.Vega = (vU - vD) / (2 * cfg.VolBump) / 100
+	down, err := price(pDown, isCall, isAsian)
+	if err != nil {
+		return nil, err
 	}
+	g.Delta = (up - down) / (2 * dS)
 
-	if cfg.TimeBump > 0 && p.Maturity > cfg.TimeBump {
+	// Gamma: d²P/dS² ≈ (P(S+h) - 2P(S) + P(S-h)) / h²
+	g.Gamma = (up - 2*base + down) / (dS * dS)
+
+	// Vega: dP/dσ
+	vUp := bump(p, func(pp *engine.Params) { pp.Vol += cfg.VolBump })
+	vDown := bump(p, func(pp *engine.Params) { pp.Vol -= cfg.VolBump })
+	vU, err := price(vUp, isCall, isAsian)
+	if err != nil {
+		return nil, err
+	}
+	vD, err := price(vDown, isCall, isAsian)
+	if err != nil {
+		return nil, err
+	}
+	g.Vega = (vU - vD) / (2 * cfg.VolBump) / 100
+
+	// Theta: -dP/dT
+	if p.Maturity > cfg.TimeBump {
 		tDown := bump(p, func(pp *engine.Params) { pp.Maturity -= cfg.TimeBump })
 		tD, err := price(tDown, isCall, isAsian)
 		if err == nil {
@@ -86,19 +90,18 @@ func Compute(p engine.Params, isCall, isAsian bool, cfg Config) (*Greeks, error)
 		}
 	}
 
-	if cfg.RateBump > 0 {
-		rUp := bump(p, func(pp *engine.Params) { pp.Rate += cfg.RateBump })
-		rDown := bump(p, func(pp *engine.Params) { pp.Rate -= cfg.RateBump })
-		rU, err := price(rUp, isCall, isAsian)
-		if err != nil {
-			return nil, err
-		}
-		rD, err := price(rDown, isCall, isAsian)
-		if err != nil {
-			return nil, err
-		}
-		g.Rho = (rU - rD) / (2 * cfg.RateBump) / 100
+	// Rho: dP/dr
+	rUp := bump(p, func(pp *engine.Params) { pp.Rate += cfg.RateBump })
+	rDown := bump(p, func(pp *engine.Params) { pp.Rate -= cfg.RateBump })
+	rU, err := price(rUp, isCall, isAsian)
+	if err != nil {
+		return nil, err
 	}
+	rD, err := price(rDown, isCall, isAsian)
+	if err != nil {
+		return nil, err
+	}
+	g.Rho = (rU - rD) / (2 * cfg.RateBump) / 100
 
 	return g, nil
 }
